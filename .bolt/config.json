@@ -1,0 +1,6 @@
+{
+  "name": "ascension-level-up",
+  "type": "vite",
+  "template": "vite-react",
+  "port": 5173
+}
