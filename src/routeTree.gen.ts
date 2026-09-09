@@ -19,12 +19,12 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as HomeRouteImport } from './routes/home'
-import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as FriendsRouteImport } from './routes/friends'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as CommunityRouteImport } from './routes/community'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdventureMapRouteImport } from './routes/adventure-map'
+import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -78,11 +78,6 @@ const HomeRoute = HomeRouteImport.update({
   path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GoalsRoute = GoalsRouteImport.update({
-  id: '/goals',
-  path: '/goals',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FriendsRoute = FriendsRouteImport.update({
   id: '/friends',
   path: '/friends',
@@ -111,6 +106,11 @@ const AdventureMapRoute = AdventureMapRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoalsRoute = GoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -168,7 +168,6 @@ export interface FileRoutesById {
   '/community': typeof CommunityRoute
   '/explore': typeof ExploreRoute
   '/friends': typeof FriendsRoute
-  '/goals': typeof GoalsRoute
   '/home': typeof HomeRoute
   '/journal': typeof JournalRoute
   '/leaderboard': typeof LeaderboardRoute
@@ -210,7 +209,6 @@ export interface FileRouteTypes {
     | '/community'
     | '/explore'
     | '/friends'
-    | '/goals'
     | '/home'
     | '/journal'
     | '/leaderboard'
@@ -230,7 +228,6 @@ export interface FileRouteTypes {
     | '/community'
     | '/explore'
     | '/friends'
-    | '/goals'
     | '/home'
     | '/journal'
     | '/leaderboard'
@@ -251,7 +248,6 @@ export interface RootRouteChildren {
   CommunityRoute: typeof CommunityRoute
   ExploreRoute: typeof ExploreRoute
   FriendsRoute: typeof FriendsRoute
-  GoalsRoute: typeof GoalsRoute
   HomeRoute: typeof HomeRoute
   JournalRoute: typeof JournalRoute
   LeaderboardRoute: typeof LeaderboardRoute
@@ -336,13 +332,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/goals': {
-      id: '/goals'
-      path: '/goals'
-      fullPath: '/goals'
-      preLoaderRoute: typeof GoalsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/friends': {
       id: '/friends'
       path: '/friends'
@@ -392,18 +381,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/goals': {
+      id: '/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof GoalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  GoalsRoute: GoalsRoute,
   AdventureMapRoute: AdventureMapRoute,
   AuthRoute: AuthRoute,
   CommunityRoute: CommunityRoute,
   ExploreRoute: ExploreRoute,
   FriendsRoute: FriendsRoute,
-  GoalsRoute: GoalsRoute,
   HomeRoute: HomeRoute,
   JournalRoute: JournalRoute,
   LeaderboardRoute: LeaderboardRoute,
