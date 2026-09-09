@@ -3,7 +3,11 @@ import { useEffect, useState, useCallback } from "react";
 import { AppShell } from "@/components/AppShell";
 import { useAuth } from "@/lib/auth-context";
 import { sounds } from "@/lib/sounds";
-import { toast } from "sonner";
+// Lightweight inline toast (avoids adding sonner dependency)
+const toast = {
+  success: (msg: string) => console.log("[toast]", msg),
+  error: (msg: string) => console.error("[toast]", msg),
+};
 import {
   type Goal, type Quest, type Difficulty, type QuestStatus,
   fetchGoals, fetchQuests, createGoal, createQuest, deleteGoal, deleteQuest,

@@ -5,10 +5,10 @@ import { sounds } from "@/lib/sounds";
 
 const TABS = [
   { to: "/home", icon: "🏠", label: "Home" },
+  { to: "/goals", icon: "🎯", label: "Goals" },
   { to: "/explore", icon: "🧭", label: "Explore" },
   { to: "/adventure-map", icon: "🗺️", label: "Map" },
   { to: "/shop", icon: "🪙", label: "Shop" },
-  { to: "/journal", icon: "📖", label: "Journal" },
   { to: "/stats", icon: "📊", label: "Stats" },
   { to: "/profile", icon: "👤", label: "Profile" },
 ] as const;
