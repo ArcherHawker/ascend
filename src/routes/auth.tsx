@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { checkUsername, checkUsernameAI, USERNAME_GUIDELINE_MESSAGE } from "@/lib/moderation";
 import { useAscend } from "@/lib/ascend-store";
@@ -23,7 +23,11 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState("");
 
@@ -36,10 +40,42 @@ function AuthPage() {
 
   const validateUsername = (value: string) => {
     setUsername(value);
+    setUsernameAvailable(null);
+    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
     if (!value.trim()) { setUsernameError(null); return; }
     const check = checkUsername(value);
-    setUsernameError(check.ok ? null : check.reason ?? USERNAME_GUIDELINE_MESSAGE);
+    if (!check.ok) { setUsernameError(check.reason ?? USERNAME_GUIDELINE_MESSAGE); return; }
+    setUsernameError(null);
+    // Debounced database availability check
+    setUsernameChecking(true);
+    usernameDebounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("username", value.trim())
+          .limit(1);
+        setUsernameAvailable(!data || data.length === 0);
+      } catch {
+        setUsernameAvailable(null);
+      } finally {
+        setUsernameChecking(false);
+      }
+    }, 500);
   };
+
+  const validatePassword = useCallback((pw: string, emailVal: string, usernameVal: string): boolean => {
+    if (pw.length < 6) { setPasswordError("Password must be at least 6 characters."); return false; }
+    const lowerPw = pw.toLowerCase().trim();
+    const lowerEmail = emailVal.toLowerCase().trim();
+    const lowerUsername = usernameVal.toLowerCase().trim();
+    if (lowerEmail && lowerPw === lowerEmail) { setPasswordError("Password cannot be the same as your email."); return false; }
+    if (lowerUsername && lowerPw === lowerUsername) { setPasswordError("Password cannot be the same as your username."); return false; }
+    if (lowerUsername && lowerPw.includes(lowerUsername) && lowerUsername.length >= 4) { setPasswordError("Password cannot contain your username."); return false; }
+    if (lowerEmail && lowerPw.includes(lowerEmail) && lowerEmail.length >= 6) { setPasswordError("Password cannot contain your email."); return false; }
+    setPasswordError(null);
+    return true;
+  }, []);
 
   const getAge = (dateStr: string): number | null => {
     if (!dateStr) return null;
@@ -62,10 +98,11 @@ function AuthPage() {
     if (view === "signup") {
       const localCheck = checkUsername(username);
       if (!localCheck.ok) { setUsernameError(localCheck.reason ?? USERNAME_GUIDELINE_MESSAGE); return; }
+      if (usernameAvailable === false) { setUsernameError("This username is already taken. Please choose another one."); return; }
       const age = getAge(dob);
       if (age === null) { setError("Please enter a valid date of birth."); return; }
       if (age < 13) { setError("You must be at least 13 years old to create an account."); return; }
-      if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+      if (!validatePassword(password, email, username)) { setError(passwordError); return; }
       setLoading(true);
       const aiCheck = await checkUsernameAI(username);
       if (!aiCheck.approved) { setUsernameError(aiCheck.reason ?? USERNAME_GUIDELINE_MESSAGE); setLoading(false); return; }
@@ -184,6 +221,9 @@ function AuthPage() {
     setError(null);
     setEmailError(null);
     setUsernameError(null);
+    setUsernameAvailable(null);
+    setUsernameChecking(false);
+    setPasswordError(null);
     setInfoMsg(null);
   };
 
@@ -320,7 +360,9 @@ function AuthPage() {
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-zinc-600 focus:outline-none focus:border-ascend-violet transition-colors"
               />
               {usernameError && <p className="mt-1.5 text-xs text-red-400 font-medium">{usernameError}</p>}
-              {!usernameError && username.trim() && <p className="mt-1.5 text-xs text-emerald-400/70 font-medium">Looks good.</p>}
+              {!usernameError && usernameChecking && <p className="mt-1.5 text-xs text-zinc-500 font-medium">Checking availability...</p>}
+              {!usernameError && !usernameChecking && usernameAvailable === true && <p className="mt-1.5 text-xs text-emerald-400 font-medium">Username is available.</p>}
+              {!usernameError && !usernameChecking && usernameAvailable === false && <p className="mt-1.5 text-xs text-amber-400 font-medium">This username is already taken.</p>}
             </div>
             <div>
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Display Name <span className="text-zinc-600 normal-case">(optional)</span></label>
@@ -363,12 +405,17 @@ function AuthPage() {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (isSignUp) validatePassword(e.target.value, email, username);
+            }}
             placeholder="At least 6 characters"
             required
             minLength={6}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm placeholder:text-zinc-600 focus:outline-none focus:border-ascend-violet transition-colors"
           />
+          {passwordError && <p className="mt-1.5 text-xs text-red-400 font-medium">{passwordError}</p>}
+          {isSignUp && !passwordError && password.length >= 6 && <p className="mt-1.5 text-xs text-emerald-400/70 font-medium">Password looks good.</p>}
         </div>
         {!isSignUp && (
           <div className="text-right">

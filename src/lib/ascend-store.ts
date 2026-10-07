@@ -111,16 +111,19 @@ const KEY = "ascend-state-v5";
 
 // ─── Level rewards ───
 export const LEVEL_REWARDS: Record<number, { icon: string; name: string }> = {
-  2: { icon: "💧", name: "Hydration Master" },
-  3: { icon: "📚", name: "Knowledge Seeker" },
-  5: { icon: "🔥", name: "Streak Warrior" },
-  7: { icon: "⚡", name: "Discipline Adept" },
-  10: { icon: "🌟", name: "Rising Star" },
+  2: { icon: "💧", name: "First Steps" },
+  3: { icon: "📖", name: "Opening Chapter" },
+  5: { icon: "🔥", name: "Building Fire" },
+  7: { icon: "⚡", name: "Charging Forward" },
+  10: { icon: "🎯", name: "Driven" },
   15: { icon: "🛡️", name: "Iron Will" },
-  20: { icon: "👑", name: "Ascendant" },
-  25: { icon: "💎", name: "Diamond Soul" },
-  30: { icon: "🏆", name: "Champion" },
-  50: { icon: "⭐", name: "Legend" },
+  20: { icon: "⚡", name: "Disciplined" },
+  25: { icon: "💠", name: "Momentum Master" },
+  30: { icon: "🏆", name: "Elite" },
+  40: { icon: "🔮", name: "Deep Focus" },
+  50: { icon: "🚀", name: "Ascending" },
+  75: { icon: "👑", name: "Master" },
+  100: { icon: "💎", name: "Ascended" },
 };
 
 export function getLevelReward(level: number): { icon: string; name: string } | null {
@@ -132,10 +135,13 @@ export type TitleDef = { id: string; label: string; icon: string; minLevel: numb
 
 export const TITLES: TitleDef[] = [
   { id: "beginner", label: "Beginner", icon: "🌱", minLevel: 1, desc: "Every legend starts somewhere" },
-  { id: "consistent", label: "Consistent", icon: "🔥", minLevel: 10, desc: "10 days of showing up" },
-  { id: "disciplined", label: "Disciplined", icon: "⚡", minLevel: 25, desc: "Mastery of self" },
-  { id: "elite", label: "Elite", icon: "🏆", minLevel: 50, desc: "Top 1% dedication" },
-  { id: "legend", label: "Legend", icon: "🌎", minLevel: 100, desc: "Among the greatest" },
+  { id: "rising", label: "Rising", icon: "📈", minLevel: 5, desc: "Gaining momentum" },
+  { id: "driven", label: "Driven", icon: "🎯", minLevel: 10, desc: "Showing up consistently" },
+  { id: "disciplined", label: "Disciplined", icon: "⚡", minLevel: 20, desc: "Mastery of self" },
+  { id: "elite", label: "Elite", icon: "🏆", minLevel: 30, desc: "Rare dedication" },
+  { id: "ascending", label: "Ascending", icon: "🚀", minLevel: 50, desc: "Rising above" },
+  { id: "master", label: "Master", icon: "👑", minLevel: 75, desc: "Commanding your path" },
+  { id: "ascended", label: "Ascended", icon: "💎", minLevel: 100, desc: "Among the greatest" },
 ];
 
 export function getUnlockedTitles(xp: number): TitleDef[] {
@@ -529,11 +535,14 @@ export function useAscend(): AscendState {
     if (!hydrated) {
       current = loadFromStorage();
       hydrated = true;
-      // Check if daily quests need regeneration on first load
       const today = new Date().toISOString().slice(0, 10);
       if (current.lastQuestDate !== today || current.dailyQuests.length === 0) {
+        current = checkStreakBreak(current);
         current.dailyQuests = generateDailyQuests(current.seenQuestIds);
         current.lastQuestDate = today;
+        persistLocal();
+      } else {
+        current = checkStreakBreak(current);
         persistLocal();
       }
       setReady(true);
@@ -548,24 +557,89 @@ export function levelFromXp(xp: number): { level: number; progress: number; xpFo
   while (true) { const need = 100 + (level - 1) * 20; if (acc + need > xp) return { level, progress: (xp - acc) / need, xpForNext: need, xpInLevel: xp - acc }; acc += need; level++; if (level > 200) return { level: 200, progress: 1, xpForNext: 0, xpInLevel: 0 }; }
 }
 
+function checkStreakBreak(s: AscendState): AscendState {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!s.lastActiveDate) return s;
+  const last = new Date(s.lastActiveDate);
+  const now = new Date(today);
+  const diffDays = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays > 1 && s.streak > 0) {
+    const freezeAvailable = s.freezeTokens > 0;
+    if (freezeAvailable && diffDays === 2) {
+      return { ...s, streak: s.streak, freezeTokens: s.freezeTokens - 1, lastFreezeDate: today };
+    }
+    return { ...s, streak: 0 };
+  }
+  return s;
+}
+
 export function completeQuest(id: string) {
   setState((s) => {
     const quest = s.dailyQuests.find((q) => q.id === id); if (!quest || quest.done) return s;
     const newStats = { ...s.stats, [quest.stat]: Math.min(100, s.stats[quest.stat] + 2) };
     const today = new Date().toISOString().slice(0, 10);
-    const newStreak = s.lastActiveDate === today ? s.streak : s.streak + 1;
+    const wasActiveToday = s.lastActiveDate === today;
+    const newStreak = wasActiveToday ? s.streak : s.streak + 1;
     const longestStreak = Math.max(s.longestStreak, newStreak);
     const newSeen = [...new Set([...s.seenQuestIds, quest.title])].slice(-50);
     const isAdventure = quest.stat === "adventure" || quest.difficulty === "epic" || quest.difficulty === "hard";
     const adventure: AdventureEntry | null = isAdventure ? { id: `adv${Date.now()}`, title: quest.title, icon: quest.icon ?? "⚔️", stat: quest.stat, xp: quest.xp, date: today, difficulty: quest.difficulty } : null;
     const adventures = adventure ? [adventure, ...s.adventures].slice(0, 100) : s.adventures;
     const coinReward = Math.round(quest.xp / 10) + (quest.difficulty === "epic" ? 15 : quest.difficulty === "hard" ? 8 : quest.difficulty === "medium" ? 4 : 2);
-    return { ...s, dailyQuests: s.dailyQuests.map((q) => (q.id === id ? { ...q, done: true } : q)), xp: s.xp + quest.xp, xpThisWeek: s.xpThisWeek + quest.xp, strideScore: Math.min(100, s.strideScore + Math.max(0.2, quest.xp / 80)), stats: newStats, completedCount: s.completedCount + 1, streak: newStreak, longestStreak, lastActiveDate: today, seenQuestIds: newSeen, adventures, coins: s.coins + coinReward };
+    const newScore = Math.min(100, s.strideScore + Math.max(0.2, quest.xp / 80));
+    const newTier = getTierLabel(newScore);
+    return { ...s, dailyQuests: s.dailyQuests.map((q) => (q.id === id ? { ...q, done: true } : q)), xp: s.xp + quest.xp, xpThisWeek: s.xpThisWeek + quest.xp, strideScore: newScore, tier: newTier, stats: newStats, completedCount: s.completedCount + 1, streak: newStreak, longestStreak, lastActiveDate: today, seenQuestIds: newSeen, adventures, coins: s.coins + coinReward };
   });
 }
 
 export function setMood(mood: Mood) {
   setState((s) => ({ ...s, mood, moodDate: new Date().toISOString().slice(0, 10) }));
+}
+
+export function getTierLabel(score: number): string {
+  if (score >= 90) return "Ascended";
+  if (score >= 75) return "Elite";
+  if (score >= 60) return "Rising";
+  if (score >= 45) return "Developing";
+  if (score >= 30) return "Beginner";
+  return "Starting";
+}
+
+export type FocusSession = {
+  id: string;
+  date: string;
+  duration: number;
+  xpEarned: number;
+  label: string;
+};
+
+export function completeFocusSession(duration: number, label: string): number {
+  const xp = Math.round(duration / 60 * 35);
+  const today = new Date().toISOString().slice(0, 10);
+  setState((s) => {
+    const newStats = { ...s.stats, discipline: Math.min(100, s.stats.discipline + 1), intelligence: Math.min(100, s.stats.intelligence + 1) };
+    const newStreak = s.lastActiveDate === today ? s.streak : s.streak + 1;
+    const longestStreak = Math.max(s.longestStreak, newStreak);
+    const newScore = Math.min(100, s.strideScore + Math.max(0.2, xp / 80));
+    const session: FocusSession = { id: `f${Date.now()}`, date: today, duration, xpEarned: xp, label };
+    const newSeen = [...new Set([...s.seenQuestIds, `focus_${label}`])].slice(-50);
+    return {
+      ...s, xp: s.xp + xp, xpThisWeek: s.xpThisWeek + xp, strideScore: newScore, tier: getTierLabel(newScore),
+      stats: newStats, completedCount: s.completedCount + 1, streak: newStreak, longestStreak,
+      lastActiveDate: today, seenQuestIds: newSeen, coins: s.coins + Math.round(xp / 10) + 2,
+      dailyQuests: s.dailyQuests, adventures: s.adventures,
+    };
+  });
+  return xp;
+}
+
+export function getFocusStats(): { totalMinutes: number; sessions: number } {
+  const s = current;
+  const focusAdventures = s.adventures.filter((a) => a.title.startsWith("Focus:"));
+  return {
+    totalMinutes: focusAdventures.length * 25,
+    sessions: focusAdventures.length,
+  };
 }
 
 export function useFreezeToken() {
